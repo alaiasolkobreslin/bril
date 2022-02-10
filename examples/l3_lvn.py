@@ -107,12 +107,11 @@ def lvm():
 
                         table[val] = num, dest
                         table[('id', num)] = num, dest
-                        table_list.append((dest, val, ('id', num)))
+                        table_list.append(dest)
                     new_args = []
                     if 'args' in instr:
                         for arg in instr['args']:
-                            new_arg, _, _ = table_list[var2num[arg]]
-                            new_args.append(new_arg)
+                            new_args.append(table_list[var2num[arg]])
                         instr['args'] = new_args
                 if 'dest' in instr:
                     var2num[old_dest] = num
