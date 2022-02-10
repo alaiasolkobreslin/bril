@@ -65,6 +65,7 @@ def lvm():
 
             # table = mapping from value tuples to canonical variables, with each row numbered
             table = {}
+
             # var2num = mapping from variable names to their current value numbers (i.e. rows in table)
             var2num = {}
             # fresh_num = current row number of table
@@ -74,15 +75,11 @@ def lvm():
                 if 'op' not in instr:
                     continue
                 val = [instr['op']]
-                flag = False
-                n, d = 0, 0
                 if 'args' in instr:
                     for arg in instr['args']:
                         val.append(var2num[arg])
                 else:
                     val.append(instr['value'])
-                    flag = True
-                    new_val = ('var', instr['dest'])
 
                 val = tuple(val)
                 if val in table:
@@ -103,8 +100,6 @@ def lvm():
                             dest = instr['dest']
 
                         table[val] = num, dest
-                        if flag:
-                            table[new_val] = num, dest
                     new_args = []
                     if 'args' in instr:
                         print(var2num)
