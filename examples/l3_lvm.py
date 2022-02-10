@@ -46,6 +46,8 @@ def fresh_var(vars, n):
 def dest_overwritten(instrs, i):
     dest = instrs[i]['dest']
     for instr in instrs[i+1:]:
+        if 'args' in instr and dest in instr['args']:
+            return False
         if 'dest' in instr and instr['dest'] == dest:
             return True
     return False
@@ -62,14 +64,15 @@ def lvm():
             all_vars = get_vars(block)
             # Next value of fresh variable
             fresh_var_n = 0
-
             # table = mapping from value tuples to canonical variables, with each row numbered
             table = {}
-
+            # table_list = list representation of table, indexed by LVN
+            table_list = []
             # var2num = mapping from variable names to their current value numbers (i.e. rows in table)
             var2num = {}
             # fresh_num = current row number of table
             fresh_num = 0
+            # number of the next expression
             num = 0
             for i, instr in enumerate(block):
                 if 'op' not in instr:
@@ -78,19 +81,22 @@ def lvm():
                 if 'args' in instr:
                     for arg in instr['args']:
                         val.append(var2num[arg])
-                else:
+                elif 'value' in instr:
                     val.append(instr['value'])
-
+                else:
+                    continue
                 val = tuple(val)
+                # print(val)
                 if val in table:
                     num, var = table[val]
                     instr['op'] = 'id'
                     instr['args'] = [var]
+                    if 'value' in instr:
+                        instr.pop('value')
                 else:
                     # Newly computed value
                     num = fresh_num
                     fresh_num += 1
-
                     if 'dest' in instr:
                         if dest_overwritten(block, i):
                             dest, fresh_var_n = fresh_var(
@@ -99,24 +105,23 @@ def lvm():
                         else:
                             dest = instr['dest']
 
+                        # Remove old stores in case of clobbering
+                        if dest in var2num:
+                            _, v1, v2 = table_list[var2num[dest]]
+                            table.pop(v1)
+                            table.pop(v2)
+
                         table[val] = num, dest
+                        table[('id', num)] = num, dest
+                        table_list.append((dest, val, ('id', num)))
                     new_args = []
                     if 'args' in instr:
-                        print(var2num)
-                        print(table)
-                        print('args:')
                         for arg in instr['args']:
-                            # print(instr['op'])
-                            print(arg)
-                            _, new_arg = table[(instr['op'], var2num[arg])]
+                            new_arg, _, _ = table_list[var2num[arg]]
                             new_args.append(new_arg)
                         instr['args'] = new_args
-                    else:
-                        _, new_value = table[(instr['op'], instr['value'])]
-                        instr['value'] = new_value
-
-                var2num[instr['dest']] = num
-
+                if 'dest' in instr:
+                    var2num[instr['dest']] = num
             new_blocks += block
         func['instrs'] = new_blocks
         new_funcs.append(func)
