@@ -1,3 +1,5 @@
+# CMD: bril2json < {filename} | python3 ../../l3_lvn.py {args} | python3 ../../l3_dce.py | bril2txt
+#
 @main {
   x: int = const 4;
   copy1: int = id x;
