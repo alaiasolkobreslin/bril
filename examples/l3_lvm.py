@@ -35,10 +35,10 @@ def get_vars(instrs):
 
 
 def fresh_var(vars, n):
-    var = 'v' + str(n)
+    var = 'lvn.' + str(n)
     while var in vars:
         n += 1
-        var = 'v' + str(n)
+        var = 'lvn.' + str(n)
     n += 1
     return var, n
 
@@ -46,8 +46,6 @@ def fresh_var(vars, n):
 def dest_overwritten(instrs, i):
     dest = instrs[i]['dest']
     for instr in instrs[i+1:]:
-        if 'args' in instr and dest in instr['args']:
-            return False
         if 'dest' in instr and instr['dest'] == dest:
             return True
     return False
@@ -85,8 +83,10 @@ def lvm():
                     val.append(instr['value'])
                 else:
                     continue
+                old_dest = ''
+                if 'dest' in instr:
+                    old_dest = instr['dest']
                 val = tuple(val)
-                # print(val)
                 if val in table:
                     num, var = table[val]
                     instr['op'] = 'id'
@@ -105,12 +105,6 @@ def lvm():
                         else:
                             dest = instr['dest']
 
-                        # Remove old stores in case of clobbering
-                        if dest in var2num:
-                            _, v1, v2 = table_list[var2num[dest]]
-                            table.pop(v1)
-                            table.pop(v2)
-
                         table[val] = num, dest
                         table[('id', num)] = num, dest
                         table_list.append((dest, val, ('id', num)))
@@ -121,7 +115,7 @@ def lvm():
                             new_args.append(new_arg)
                         instr['args'] = new_args
                 if 'dest' in instr:
-                    var2num[instr['dest']] = num
+                    var2num[old_dest] = num
             new_blocks += block
         func['instrs'] = new_blocks
         new_funcs.append(func)
