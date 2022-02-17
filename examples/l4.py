@@ -119,7 +119,6 @@ def constant_prop_worklist(cfg, preds_cfg, name2block):
         # Pop off a block from the worklist
         block = worklist.pop()
         (succs, _, out_dict_init) = cfg[block]
-        # store these in a table
         out_dicts = [cfg[pred][2] for pred in preds_cfg[block]]
         in_dict = meet(out_dicts)
         out_dict = transfer(in_dict, name2block[block])
