@@ -4,8 +4,6 @@ from collections import OrderedDict
 
 TERMINATORS = 'jmp', 'br', 'ret'
 
-# class Value:
-
 
 def form_blocks(body):
     cur_block = []
@@ -144,8 +142,8 @@ def constant_propagation():
         constant_prop_worklist(cfg, preds_cfg, name2block)
         for (block, (_, in_dict, out_dict)) in cfg.items():
             print(f'{block}:')
-            print(f'in: {in_dict}')
-            print(f'out: {out_dict}')
+            print(f'\tin: {in_dict}')
+            print(f'\tout: {out_dict}')
 
 
 if __name__ == '__main__':
