@@ -121,14 +121,28 @@ def constant_prop_worklist(cfg, preds_cfg, name2block):
         (succs, _, out_dict_init) = cfg[block]
         # store these in a table
         out_dicts = [cfg[pred][2] for pred in preds_cfg[block]]
-        print(f'current out_dicts: {out_dicts}')
         in_dict = meet(out_dicts)
-        print(f'out_dicts merged: {in_dict}')
         out_dict = transfer(in_dict, name2block[block])
         if out_dict != out_dict_init:
             for succ in succs:
                 worklist.add(succ)
         cfg[block] = (succs, in_dict, out_dict)
+
+
+def print_dict(dict):
+    sorted_keys = sorted(dict.keys())
+    if not sorted_keys:
+        print('{}')
+        return
+    flag = True
+    for key in sorted_keys:
+        if flag:
+            flag = False
+        else:
+            print(", ", end="")
+        print(key, end=": ")
+        print(dict[key], end="")
+    print()
 
 
 def constant_propagation():
@@ -137,13 +151,13 @@ def constant_propagation():
         name2block = block_map(form_blocks(func['instrs']))
         cfg = get_cfg(name2block, {})
         preds_cfg = get_preds_cfg(cfg)
-        print(cfg)
-        print(preds_cfg)
         constant_prop_worklist(cfg, preds_cfg, name2block)
         for (block, (_, in_dict, out_dict)) in cfg.items():
             print(f'{block}:')
-            print(f'\tin: {in_dict}')
-            print(f'\tout: {out_dict}')
+            print('\tin', end=":  ")
+            print_dict(in_dict)
+            print('\tout', end=":  ")
+            print_dict(out_dict)
 
 
 if __name__ == '__main__':

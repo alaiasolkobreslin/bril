@@ -11,7 +11,7 @@
   br cond .body .end;
 
 .body:
-  result: int = mul result i;
+  result: int = const 1;
 
   # i--
   one: int = const 1;

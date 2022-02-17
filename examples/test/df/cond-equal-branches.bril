@@ -1,0 +1,19 @@
+# CMD: bril2json < {filename} | python3 ../../l4.py {args}
+#
+@main(cond: bool) {
+  a: int = const 47;
+  b: int = const 42;
+  br cond .left .right;
+.left:
+  b: int = const 1;
+  c: int = const 10;
+  jmp .end;
+.right:
+  a: int = const 2;
+  b: int = const 1;
+  c: int = const 10;
+  jmp .end;
+.end:
+  d: int = sub a c;
+  print d;
+}
