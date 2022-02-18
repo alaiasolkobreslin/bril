@@ -9,8 +9,8 @@
   c: int = const 10;
   jmp .end;
 .right:
-  a: int = const 2;
-  b: int = const 1;
+  a: int = const 47;
+  b: int = const 100;
   c: int = const 10;
   jmp .end;
 .end:
