@@ -59,14 +59,6 @@ def get_preds_cfg(cfg):
     return preds
 
 
-def get_predecessors(name, cfg):
-    preds = set()
-    for (block, (succ, _, _)) in cfg.items():
-        if name in succ:
-            preds.add(block)
-    return preds
-
-
 def block_map(blocks):
     out = OrderedDict()
 
