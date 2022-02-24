@@ -2,7 +2,7 @@ import json
 import sys
 from collections import OrderedDict
 
-from mycfg import block_map, form_blocks, get_cfg
+from mycfg import *
 
 
 def get_preds_cfg(cfg):
@@ -14,6 +14,32 @@ def get_preds_cfg(cfg):
             if name in succ:
                 preds[name].add(n)
     return preds
+
+
+def get_fresh_entry(cfg):
+    entry = '.entry'
+    if entry not in cfg:
+        return entry
+    i = 1
+    while True:
+        new_entry = entry + '.' + str(i)
+        if new_entry not in cfg:
+            return new_entry
+        i += 1
+
+
+def add_entry(cfg):
+    preds_cfg = get_preds_cfg(cfg)
+    entering_blocks = set()
+    for block, preds in preds_cfg.items():
+        if not preds:
+            entering_blocks.add(block)
+    if len(entering_blocks) == 1:
+        return entering_blocks.pop()
+    elif len(entering_blocks) > 1:
+        entry = get_fresh_entry(cfg)
+        cfg[entry] = entering_blocks
+        return entry
 
 
 def reverse_dominators(dominators):
@@ -77,19 +103,18 @@ def dominance_frontier(cfg, preds_cfg):
 
 def dom(prog, typ):
     for func in prog['functions']:
-        name2block = block_map(form_blocks(func['instrs']))
+        blocks = form_blocks(func['instrs'])
+        name2block = block_map(blocks)
         cfg = get_cfg(name2block)
+        entry = add_entry(cfg)
         preds_cfg = get_preds_cfg(cfg)
 
-        print(f"cfg: {cfg}")
-        print(f"preds cfg {preds_cfg}")
-
-        if typ == 'dominators':
-            find_dominators(cfg, preds_cfg)
-        elif typ == "tree":
+        if typ == "tree":
             dominator_tree(cfg, preds_cfg)
         elif typ == "frontier":
             dominance_frontier(cfg, preds_cfg)
+        else:
+            find_dominators(cfg, preds_cfg)
 
 
 if __name__ == '__main__':
