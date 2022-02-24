@@ -1,6 +1,5 @@
 import json
 import sys
-from collections import OrderedDict
 
 from mycfg import *
 
