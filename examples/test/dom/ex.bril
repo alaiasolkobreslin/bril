@@ -1,0 +1,8 @@
+@main{
+.jmp1:
+    jmp .jmp2;
+.jmp2:
+    jmp .jmp3;
+.jmp3:
+    jmp .jmp1;
+}

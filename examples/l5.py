@@ -17,7 +17,7 @@ def get_preds_cfg(cfg):
 
 
 def get_fresh_entry(cfg):
-    entry = '.entry'
+    entry = 'entry'
     if entry not in cfg:
         return entry
     i = 1
@@ -29,17 +29,14 @@ def get_fresh_entry(cfg):
 
 
 def add_entry(cfg):
-    preds_cfg = get_preds_cfg(cfg)
-    entering_blocks = set()
-    for block, preds in preds_cfg.items():
-        if not preds:
-            entering_blocks.add(block)
-    if len(entering_blocks) == 1:
-        return entering_blocks.pop()
-    elif len(entering_blocks) > 1:
-        entry = get_fresh_entry(cfg)
-        cfg[entry] = entering_blocks
-        return entry
+    entry = list(cfg.keys())[0]
+    for _, succs in cfg.items():
+        if entry in succs:
+            fresh_entry = get_fresh_entry(cfg)
+            cfg[fresh_entry] = [entry]
+            print(cfg)
+            return fresh_entry
+    return entry
 
 
 def reverse_dominators(dominators):
