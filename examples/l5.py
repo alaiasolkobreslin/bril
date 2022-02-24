@@ -49,7 +49,7 @@ def reverse_dominators(dominators):
             if block_dom in rev:
                 rev[block_dom].add(block)
             else:
-                rev[block_dom] = set([block])
+                rev[block_dom] = {block}
     return rev
 
 
@@ -62,7 +62,7 @@ def find_dominators(cfg, preds_cfg):
         old_dom = dominators.copy()
         for block in cfg:
             pred_dom = [dominators[p] for p in preds_cfg[block]]
-            dominators[block] = set([block])
+            dominators[block] = {block}
             if pred_dom:
                 dominators[block] = dominators[block] | pred_dom[0].intersection(
                     *pred_dom)
@@ -79,7 +79,7 @@ def dominator_tree(cfg, preds_cfg):
     for (block, sub_blocks) in rev_dominators.items():
         children = set()
         for b in sub_blocks:
-            if b != block and dominators[b] == dominators[block] | set([b]):
+            if b != block and dominators[b] == dominators[block] | {b}:
                 children.add(b)
         dom_tree[block] = children
     print(f"dominator tree: {dom_tree}")
@@ -106,7 +106,7 @@ def dom(prog, typ):
         blocks = form_blocks(func['instrs'])
         name2block = block_map(blocks)
         cfg = get_cfg(name2block)
-        entry = add_entry(cfg)
+        add_entry(cfg)
         preds_cfg = get_preds_cfg(cfg)
 
         if typ == "tree":
