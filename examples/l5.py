@@ -64,7 +64,6 @@ def find_dominators(cfg, preds_cfg):
                     *pred_dom)
         if old_dom == dominators:
             break
-    print(f"dominators: {dominators}")
     return dominators
 
 
@@ -78,7 +77,6 @@ def dominator_tree(cfg, preds_cfg):
             if b != block and dominators[b] == dominators[block] | {b}:
                 children.add(b)
         dom_tree[block] = children
-    print(f"dominator tree: {dom_tree}")
     return dom_tree
 
 
@@ -93,7 +91,6 @@ def dominance_frontier(cfg, preds_cfg):
                         if a not in dom_frontier:
                             dom_frontier[a] = set()
                         dom_frontier[a].add(b)
-    print(f"dominance frontier: {dom_frontier}")
     return dom_frontier
 
 
@@ -106,11 +103,14 @@ def dom(prog, typ):
         preds_cfg = get_preds_cfg(cfg)
 
         if typ == "tree":
-            dominator_tree(cfg, preds_cfg)
+            dom_tree = dominator_tree(cfg, preds_cfg)
+            print(f"dominator tree: {dom_tree}")
         elif typ == "frontier":
-            dominance_frontier(cfg, preds_cfg)
+            dom_frontier = dominance_frontier(cfg, preds_cfg)
+            print(f"dominance frontier: {dom_frontier}")
         else:
-            find_dominators(cfg, preds_cfg)
+            dominators = find_dominators(cfg, preds_cfg)
+            print(f"dominators: {dominators}")
 
 
 if __name__ == '__main__':
