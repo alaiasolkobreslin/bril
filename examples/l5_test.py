@@ -45,7 +45,7 @@ def dominator_tree_correct(dom_tree, cfg, entry):
     return True
 
 
-def dominance_frontier_correct(dom_frontier, cfg, preds_cfg, dominators, entry):
+def dominance_frontier_correct(dom_frontier, cfg, preds_cfg, entry):
     for a, frontier in dom_frontier.items():
         for b in frontier:
             if does_dominate(cfg, entry, a, b):
@@ -68,14 +68,14 @@ def dom_test(prog, typ):
         preds_cfg = get_preds_cfg(cfg)
 
     if typ == "tree":
-        assert(dominator_tree_correct(
-            dominator_tree(cfg, preds_cfg), cfg, entry))
+        tree = dominator_tree(cfg, preds_cfg)
+        assert(dominator_tree_correct(tree, cfg, entry))
     elif typ == "frontier":
-        assert(dominance_frontier_correct(
-            dominance_frontier(cfg, preds_cfg), cfg, preds_cfg, dominator_tree(cfg, preds_cfg), entry))
+        frontier = dominance_frontier(cfg, preds_cfg)
+        assert(dominance_frontier_correct(frontier, cfg, preds_cfg, entry))
     else:
-        assert(find_dominators_correct(
-            find_dominators(cfg, preds_cfg), cfg, entry))
+        dominators = find_dominators(cfg, preds_cfg)
+        assert(find_dominators_correct(dominators, cfg, entry))
 
 
 if __name__ == '__main__':
