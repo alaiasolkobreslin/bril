@@ -45,49 +45,82 @@ def insert_phi_nodes(vars, cfg, name2block):
                     defs[v].add(block)
             if defs[v] == v_defs:
                 break
+    print(phi_nodes)
     return phi_nodes
 
 
 def rename_variables(vars, cfg, name2block, phi_nodes):
 
-    global stack
     stack = {v: [v] for v in vars}
-    items = stack.items()
     fresh_nums = {v: 0 for v in vars}
     preds_cfg = get_preds_cfg(cfg)
     entry = list(cfg.keys())[0]
+    renamed_phi_args = {block: {p: []
+                                for p in phi_nodes[block]} for block in cfg}
+    renamed_phi_dests = {block: {p: p
+                                 for p in phi_nodes[block]} for block in cfg}
+    dominance_tree = dominator_tree(cfg, preds_cfg)
 
-    def _rename(block_name):
-        old_stack = stack.copy()
+    def push_stack(dest):
+        fresh = fresh_nums[dest]
+        new_dest = dest + '.' + str(fresh)
+        stack[dest].append(new_dest)
+        fresh_nums[dest] = fresh + 1
+
+    def rename(block_name):
+        nonlocal stack
+        old_stack = {k: v for (k, v) in stack.items()}
         block = name2block[block_name]
-        for instr in block:
-            names_pushed = {v: set() for v in vars}
 
+        new_stack_items = {v: set() for v in vars}
+
+        for p in phi_nodes[block_name]:
+            new_dest = push_stack(p)
+            renamed_phi_dests[block_name][p] = new_dest
+            new_stack_items[p].add(new_dest)
+
+        for instr in block:
             if 'args' in instr:
                 # replace each argument to instr with stack[old name]
-                new_args = [stack[arg][-1] for arg in instr['args']]
+                new_args = []
+                for arg in instr['args']:
+                    if arg in stack:
+                        new_args.append(stack[arg][-1])
+                    else:
+                        new_args.append(arg)
                 instr['args'] = new_args
 
             if 'dest' in instr:
                 # replace instr's destination with a new name
                 dest = instr['dest']
-                new_dest = instr['dest'] + '.' + str(fresh_nums[dest])
-                instr['dest'] = new_dest
-                stack[dest].append(new_dest)
-                names_pushed[dest].add(new_dest)
-                fresh_nums[dest] = fresh_nums[dest] + 1
+                if dest in stack:
+                    new_dest = push_stack(dest)
+                    instr['dest'] = new_dest
+                    new_stack_items[dest].add(new_dest)
 
-            for s in preds_cfg[block_name]:
-                for p in phi_nodes[s]:
-                    pass  # TODO
+        for s in cfg[block_name]:
+            for p in phi_nodes[s]:
+                # Assuming p is for a variable v, make it read from stack[v].
+                if p in renamed_phi_args[s]:
+                    renamed_phi_args[s][p].append(stack[p][-1])
+                else:
+                    pass
 
-            for b in cfg[block_name]:
-                _rename(b)
+        for b in dominance_tree[block_name]:
+            rename(b)
 
-            # pop all the names we just pushed onto the stacks
-            stack = old_stack
+        # pop all the names we just pushed onto the stacks
+        print(f"stack before clear: {stack}")
+        # stack.clear()
+        # stack.update(old_stack)
+        for (v, s) in new_stack_items.items():
+            if s in stack[v]:
+                print('yeet here')
+                stack[v].remove(s)
+        print(f"stack after clear: {stack}")
 
-    idk = _rename(entry)
+    rename(entry)
+    print(name2block)
 
 # stack[v] is a stack of variable names (for every variable v)
 
