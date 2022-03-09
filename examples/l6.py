@@ -66,6 +66,7 @@ def rename_variables(vars, cfg, name2block, phi_nodes):
         new_dest = dest + '.' + str(fresh)
         stack[dest].append(new_dest)
         fresh_nums[dest] = fresh + 1
+        return new_dest
 
     def rename(block_name):
         nonlocal stack
