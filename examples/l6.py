@@ -146,30 +146,34 @@ def get_types(name2block):
 
 def from_ssa(name2block, blocks):
     # insert id instructions
-    for block in blocks:
-        for instr in block:
-            if 'op' in instr and instr['op'] == 'phi':
-                print('yeet skeet got here')
-                for i, label in enumerate(instr['labels']):
-                    arg = instr['args'][i]
-                    last_block = name2block[label]
-                    new_instr = {
-                        "op": "id",
-                        "dest": instr['dest'],
-                        "type": instr['type'],
-                        "args": [arg]
-                    }
-                    last_block.insert(-1, new_instr)
+    for instr in blocks:
+        if 'op' in instr and instr['op'] == 'phi':
+            for i, label in enumerate(instr['labels']):
+                arg = instr['args'][i]
+                last_block = name2block[label]
+                new_instr = {
+                    "op": "id",
+                    "dest": instr['dest'],
+                    "type": instr['type'],
+                    "args": [arg]
+                }
+                last_block.insert(-1, new_instr)
 
+    blocks = flatten_blocks(name2block)
     # remove phi nodes
     new_blocks = []
-    for block in blocks:
-        new_block = []
-        for instr in block:
-            if 'op' not in instr or instr['op'] != 'phi':
-                new_block.append(instr)
-        new_blocks.append(block)
+    for instr in blocks:
+        if 'op' not in instr or instr['op'] != 'phi':
+            new_blocks.append(instr)
     return new_blocks
+
+
+def flatten_blocks(name2block):
+    flattened = []
+    for name, block in name2block.items():
+        flattened.append({"label": name})
+        flattened += block
+    return flattened
 
 
 def ssa():
@@ -187,7 +191,8 @@ def ssa():
             vars, cfg, name2block, phi_nodes)
         insert_phi_instructions(
             name2block, renamed_phi_args, renamed_phi_dests, types)
-        new_blocks = from_ssa(name2block, blocks)
+
+        new_blocks = from_ssa(name2block, flatten_blocks(name2block))
         func['instrs'] = new_blocks
     print(json.dumps(prog))
 
