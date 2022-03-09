@@ -1,6 +1,7 @@
 
 import json
 import sys
+from tkinter import N
 
 from mycfg import *
 from l5 import *
@@ -39,13 +40,11 @@ def insert_phi_nodes(vars, cfg, name2block):
             v_defs = defs[v].copy()
             for d in v_defs:  # Blocks where v is assigned
                 frontier = dom_frontier(cfg, d)
-                print(f"frontier: {frontier}")
                 for block in frontier:  # Dominance frontier
                     phi_nodes[block].add(v)
                     defs[v].add(block)
             if defs[v] == v_defs:
                 break
-    print(phi_nodes)
     return phi_nodes
 
 
@@ -104,8 +103,8 @@ def rename_variables(vars, cfg, name2block, phi_nodes):
                 if p in renamed_phi_args[s]:
                     renamed_phi_args[s][p][0].append(stack[p][-1])
                     renamed_phi_args[s][p][1].append(block_name)
-                else:
-                    pass
+                # else:
+                #     pass
 
         for b in sorted(dominance_tree[block_name]):
             rename(b)
@@ -145,9 +144,40 @@ def get_types(name2block):
     return types
 
 
-def to_ssa():
+def from_ssa(name2block, blocks):
+    # insert id instructions
+    for block in blocks:
+        for instr in block:
+            if 'op' in instr and instr['op'] == 'phi':
+                print('yeet skeet got here')
+                for i, label in enumerate(instr['labels']):
+                    arg = instr['args'][i]
+                    last_block = name2block[label]
+                    new_instr = {
+                        "op": "id",
+                        "dest": instr['dest'],
+                        "type": instr['type'],
+                        "args": [arg]
+                    }
+                    last_block.insert(-1, new_instr)
+
+    # remove phi nodes
+    new_blocks = []
+    for block in blocks:
+        new_block = []
+        for instr in block:
+            if 'op' not in instr or instr['op'] != 'phi':
+                new_block.append(instr)
+        new_blocks.append(block)
+    return new_blocks
+
+
+def ssa():
     prog = json.load(sys.stdin)
     for func in prog['functions']:
+        blocks = []
+        for block in form_blocks(func['instrs']):
+            blocks.append(block)
         name2block = block_map(form_blocks(func['instrs']))
         types = get_types(name2block)
         cfg = get_cfg(name2block)
@@ -157,8 +187,10 @@ def to_ssa():
             vars, cfg, name2block, phi_nodes)
         insert_phi_instructions(
             name2block, renamed_phi_args, renamed_phi_dests, types)
-        print(name2block)
+        new_blocks = from_ssa(name2block, blocks)
+        func['instrs'] = new_blocks
+    print(json.dumps(prog))
 
 
 if __name__ == '__main__':
-    to_ssa()
+    ssa()
