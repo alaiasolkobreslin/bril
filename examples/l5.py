@@ -82,14 +82,12 @@ def dominator_tree(cfg, preds_cfg):
 
 def dominance_frontier(cfg, preds_cfg):
     rev_dominators = reverse_dominators(find_dominators(cfg, preds_cfg))
-    dom_frontier = {}
+    dom_frontier = {b: set() for b in cfg}
     for a in cfg:
         for b in cfg:
             if b not in rev_dominators[a]:
                 for pred in preds_cfg[b]:
                     if pred in rev_dominators[a]:
-                        if a not in dom_frontier:
-                            dom_frontier[a] = set()
                         dom_frontier[a].add(b)
     return dom_frontier
 
