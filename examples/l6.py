@@ -7,11 +7,10 @@ from collections import defaultdict
 
 from mycfg import *
 from l5 import *
-from cfg import add_entry
+from cfg import add_entry, add_terminators
 
 
 def dom_frontier(cfg):
-  # dominance frontier: {'entry': set(), 'loop': set(), 'body': {'loop'}, 'exit': set()}
     preds_cfg = get_preds_cfg(cfg)
     frontier = dominance_frontier(cfg, preds_cfg)
     return frontier
@@ -54,13 +53,18 @@ def insert_phi_nodes(vars, cfg, name2block):
 
 def rename_variables(vars, cfg, name2block, phi_nodes, fn_arguments):
 
-    # stack = {a: [a] for a in fn_arguments}
+    # stack initally contains only the function arguments
     stack = defaultdict(list, {a: [a] for a in fn_arguments})
+    # fresh_nums keeps track of the counter for each var and is used for renaming
     fresh_nums = {v: 0 for v in vars}
+    # predecessors cfg
     preds_cfg = get_preds_cfg(cfg)
     entry = list(cfg.keys())[0]
-    renamed_phi_args = {block: {p: []
+    # renamed_phi_args keeps a set of (argname, label) pairs associated with
+    # each phi node
+    renamed_phi_args = {block: {p: set()
                                 for p in phi_nodes[block]} for block in cfg}
+    # renamed_phi_dests keeps a dest name associated with each phi node
     renamed_phi_dests = {block: {p: p
                                  for p in phi_nodes[block]} for block in cfg}
     dominance_tree = dominator_tree(cfg, preds_cfg)
@@ -72,7 +76,6 @@ def rename_variables(vars, cfg, name2block, phi_nodes, fn_arguments):
             stack[dest] = [new_dest]
         else:
             stack[dest].append(new_dest)
-        # print(f"new stack: {stack}")
         fresh_nums[dest] = fresh + 1
         return new_dest
 
@@ -80,11 +83,11 @@ def rename_variables(vars, cfg, name2block, phi_nodes, fn_arguments):
         nonlocal stack
         block = name2block[block_name]
 
+        # keep track of new elements pushed onto the stack during this call
         new_stack_items = {v: set() for v in vars}
 
         for p in phi_nodes[block_name]:
             new_dest = push_stack(p)
-            # print(f"new dest case phi nodes: {new_dest}")
             renamed_phi_dests[block_name][p] = new_dest
             new_stack_items[p].add(new_dest)
 
@@ -94,7 +97,6 @@ def rename_variables(vars, cfg, name2block, phi_nodes, fn_arguments):
                 new_args = []
                 for arg in instr['args']:
                     if stack[arg]:
-                        # print(stack[arg])
                         new_args.append(stack[arg][-1])
                     else:
                         new_args.append(arg)
@@ -115,12 +117,13 @@ def rename_variables(vars, cfg, name2block, phi_nodes, fn_arguments):
                     renamed = (stack[p][-1], block_name)
                 else:
                     renamed = ('undefined', block_name)
-                renamed_phi_args[s][p].append(renamed)
+                renamed_phi_args[s][p].add(renamed)
 
         for b in sorted(dominance_tree[block_name]):
             rename(b)
 
         # pop all the names we just pushed onto the stacks
+        # (I realize this is a really silly way of resetting the stack)
         for (v, new_items) in new_stack_items.items():
             for s in new_items:
                 stack[v].remove(s)
@@ -134,7 +137,6 @@ def insert_phi_instructions(name2block, renamed_phi_args, renamed_phi_dests, typ
         phi_args = renamed_phi_args[name]
         phi_dests = renamed_phi_dests[name]
         for (p, dest) in phi_dests.items():
-            args = phi_args[p]
             instr = {
                 "op": "phi",
                 "dest": dest,
@@ -204,7 +206,6 @@ def to_ssa(prog):
         insert_phi_instructions(
             name2block, renamed_phi_args, renamed_phi_dests, types)
         new_blocks = flatten_blocks(name2block)
-
         func['instrs'] = new_blocks
     print(json.dumps(prog))
 
