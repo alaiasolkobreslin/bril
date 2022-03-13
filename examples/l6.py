@@ -3,14 +3,18 @@ import json
 import sys
 from tkinter import N
 
+from collections import defaultdict
+
 from mycfg import *
 from l5 import *
+from cfg import add_entry
 
 
-def dom_frontier(cfg, d):
+def dom_frontier(cfg):
+  # dominance frontier: {'entry': set(), 'loop': set(), 'body': {'loop'}, 'exit': set()}
     preds_cfg = get_preds_cfg(cfg)
     frontier = dominance_frontier(cfg, preds_cfg)
-    return frontier[d]
+    return frontier
 
 
 def get_variable_names(name2block):
@@ -35,12 +39,12 @@ def get_var_defs(vars, name2block):
 def insert_phi_nodes(vars, cfg, name2block):
     phi_nodes = {block: set() for block in cfg}
     defs = get_var_defs(vars, name2block)
+    frontier = dom_frontier(cfg)
     for v in vars:
         while True:
             v_defs = defs[v].copy()
             for d in v_defs:  # Blocks where v is assigned
-                frontier = dom_frontier(cfg, d)
-                for block in frontier:  # Dominance frontier
+                for block in frontier[d]:  # Dominance frontier
                     phi_nodes[block].add(v)
                     defs[v].add(block)
             if defs[v] == v_defs:
@@ -48,13 +52,14 @@ def insert_phi_nodes(vars, cfg, name2block):
     return phi_nodes
 
 
-def rename_variables(vars, cfg, name2block, phi_nodes):
+def rename_variables(vars, cfg, name2block, phi_nodes, fn_arguments):
 
-    stack = {v: [v] for v in vars}
+    # stack = {a: [a] for a in fn_arguments}
+    stack = defaultdict(list, {a: [a] for a in fn_arguments})
     fresh_nums = {v: 0 for v in vars}
     preds_cfg = get_preds_cfg(cfg)
     entry = list(cfg.keys())[0]
-    renamed_phi_args = {block: {p: ([], [])
+    renamed_phi_args = {block: {p: []
                                 for p in phi_nodes[block]} for block in cfg}
     renamed_phi_dests = {block: {p: p
                                  for p in phi_nodes[block]} for block in cfg}
@@ -63,7 +68,11 @@ def rename_variables(vars, cfg, name2block, phi_nodes):
     def push_stack(dest):
         fresh = fresh_nums[dest]
         new_dest = dest + '.' + str(fresh)
-        stack[dest].append(new_dest)
+        if dest not in stack:
+            stack[dest] = [new_dest]
+        else:
+            stack[dest].append(new_dest)
+        # print(f"new stack: {stack}")
         fresh_nums[dest] = fresh + 1
         return new_dest
 
@@ -75,6 +84,7 @@ def rename_variables(vars, cfg, name2block, phi_nodes):
 
         for p in phi_nodes[block_name]:
             new_dest = push_stack(p)
+            # print(f"new dest case phi nodes: {new_dest}")
             renamed_phi_dests[block_name][p] = new_dest
             new_stack_items[p].add(new_dest)
 
@@ -83,7 +93,8 @@ def rename_variables(vars, cfg, name2block, phi_nodes):
                 # replace each argument to instr with stack[old name]
                 new_args = []
                 for arg in instr['args']:
-                    if arg in stack:
+                    if stack[arg]:
+                        # print(stack[arg])
                         new_args.append(stack[arg][-1])
                     else:
                         new_args.append(arg)
@@ -92,19 +103,19 @@ def rename_variables(vars, cfg, name2block, phi_nodes):
             if 'dest' in instr:
                 # replace instr's destination with a new name
                 dest = instr['dest']
-                if dest in stack:
-                    new_dest = push_stack(dest)
-                    instr['dest'] = new_dest
-                    new_stack_items[dest].add(new_dest)
+                new_dest = push_stack(dest)
+                instr['dest'] = new_dest
+                new_stack_items[dest].add(new_dest)
 
         for s in cfg[block_name]:
             for p in phi_nodes[s]:
                 # Assuming p is for a variable v, make it read from stack[v].
-                if p in renamed_phi_args[s]:
-                    renamed_phi_args[s][p][0].append(stack[p][-1])
-                    renamed_phi_args[s][p][1].append(block_name)
-                # else:
-                #     pass
+                renamed = None
+                if stack[p]:
+                    renamed = (stack[p][-1], block_name)
+                else:
+                    renamed = ('undefined', block_name)
+                renamed_phi_args[s][p].append(renamed)
 
         for b in sorted(dominance_tree[block_name]):
             rename(b)
@@ -123,15 +134,14 @@ def insert_phi_instructions(name2block, renamed_phi_args, renamed_phi_dests, typ
         phi_args = renamed_phi_args[name]
         phi_dests = renamed_phi_dests[name]
         for (p, dest) in phi_dests.items():
-            args = phi_args[p][0]
+            args = phi_args[p]
             instr = {
                 "op": "phi",
                 "dest": dest,
-                "args": args,
-                "labels": [labels for labels in phi_args[p][1]],
+                "args": [block_label[0] for block_label in phi_args[p]],
+                "labels": [block_label[1] for block_label in phi_args[p]],
                 "type": types[p]
             }
-
             block.insert(0, instr)
 
 
@@ -144,7 +154,7 @@ def get_types(name2block):
     return types
 
 
-def from_ssa(name2block, blocks):
+def remove_phis(name2block, blocks):
     # insert id instructions
     for instr in blocks:
         if 'op' in instr and instr['op'] == 'phi':
@@ -176,26 +186,45 @@ def flatten_blocks(name2block):
     return flattened
 
 
-def ssa():
-    prog = json.load(sys.stdin)
+def to_ssa(prog):
     for func in prog['functions']:
-        blocks = []
-        for block in form_blocks(func['instrs']):
-            blocks.append(block)
+        if 'args' in func:
+            fn_arguments = {arg['name'] for arg in func['args']}
+        else:
+            fn_arguments = set()
         name2block = block_map(form_blocks(func['instrs']))
+        add_entry(name2block)
+        add_terminators(name2block)
         types = get_types(name2block)
         cfg = get_cfg(name2block)
         vars = get_variable_names(name2block)
         phi_nodes = insert_phi_nodes(vars, cfg, name2block)
         renamed_phi_args, renamed_phi_dests = rename_variables(
-            vars, cfg, name2block, phi_nodes)
+            vars, cfg, name2block, phi_nodes, fn_arguments)
         insert_phi_instructions(
             name2block, renamed_phi_args, renamed_phi_dests, types)
+        new_blocks = flatten_blocks(name2block)
 
-        new_blocks = from_ssa(name2block, flatten_blocks(name2block))
+        func['instrs'] = new_blocks
+    print(json.dumps(prog))
+
+
+def from_ssa(prog):
+    for func in prog['functions']:
+        blocks = func['instrs']
+        name2block = block_map(form_blocks(blocks))
+        new_blocks = remove_phis(name2block, blocks)
         func['instrs'] = new_blocks
     print(json.dumps(prog))
 
 
 if __name__ == '__main__':
-    ssa()
+    prog = json.load(sys.stdin)
+    args = sys.argv
+    typ = 'to-ssa'
+    if len(args) > 1:
+        typ = args[1]
+    if typ == 'from-ssa':
+        from_ssa(prog)
+    else:
+        to_ssa(prog)

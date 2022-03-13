@@ -85,7 +85,8 @@ def dominance_frontier(cfg, preds_cfg):
     dom_frontier = {b: set() for b in cfg}
     for a in cfg:
         for b in cfg:
-            if b not in rev_dominators[a]:
+            # a does not strictly dominate b
+            if b not in rev_dominators[a] or b == a:
                 for pred in preds_cfg[b]:
                     if pred in rev_dominators[a]:
                         dom_frontier[a].add(b)
