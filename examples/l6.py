@@ -119,7 +119,7 @@ def rename_variables(vars, cfg, name2block, phi_nodes, fn_arguments):
                     renamed = ('undefined', block_name)
                 renamed_phi_args[s][p].add(renamed)
 
-        for b in sorted(dominance_tree[block_name]):
+        for b in dominance_tree[block_name]:
             rename(b)
 
         # pop all the names we just pushed onto the stacks
@@ -222,10 +222,10 @@ def from_ssa(prog):
 if __name__ == '__main__':
     prog = json.load(sys.stdin)
     args = sys.argv
-    typ = 'to-ssa'
+    typ = '--to-ssa'
     if len(args) > 1:
         typ = args[1]
-    if typ == 'from-ssa':
+    if typ == '--from-ssa':
         from_ssa(prog)
     else:
         to_ssa(prog)
