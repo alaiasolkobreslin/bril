@@ -48,7 +48,7 @@ def dominator_tree_correct(dom_tree, cfg, entry):
 def dominance_frontier_correct(dom_frontier, cfg, preds_cfg, entry):
     for a, frontier in dom_frontier.items():
         for b in frontier:
-            if does_dominate(cfg, entry, a, b):
+            if does_dominate(cfg, entry, a, b) and a != b:
                 return False
             does_dominate_some_pred = False
             for pred in preds_cfg:
