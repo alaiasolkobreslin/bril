@@ -46,12 +46,23 @@ def get_natural_loops(cfg):
 
 
 def get_reaching_defs_of_var(reaching, var, num2instr):
-    defs = {}
+    defs = []
     for i in reaching:
         instr = num2instr[i]
         if 'dest' in instr and instr['dest'] == var:
-            defs.add(i)
+            defs.append(i)
+    print(f"reaching defs of var: {var} are defs: {defs}")
     return defs
+
+
+def is_li(reaching, num2label, loop, li):
+    print("here in is li")
+    all_outside = True
+    for i in reaching:
+        label = num2label[i]
+        if label in loop:
+            all_outside = False
+    return all_outside or (len(reaching) == 1 and reaching[0] in li)
 
 
 def identify_li_instrs(natural_loops, reaching_defs, preds_cfg, name2block):
@@ -61,13 +72,24 @@ def identify_li_instrs(natural_loops, reaching_defs, preds_cfg, name2block):
         header = loop[0]
         preheader = preds_cfg[header]
         while True:
+            li_copy = {elt for elt in li}
             for name in loop:
                 block = name2block[name]
                 for instr, i in block:
                     if 'args' in instr:
+                        flag = True
                         for arg in instr['args']:
                             reaching = get_reaching_defs_of_var(
                                 reaching_defs[i], arg, num2instr)
+                            if not is_li(reaching, num2label, loop, li):
+                                flag = False
+                        if flag:
+                            li.add(i)
+                    elif 'op' in instr and instr['op'] == 'const':
+                        li.add(i)
+            if li_copy == li:
+                break
+    print(f"loop invariant stuff: {li}")
 
 # iterate to convergence:
 #     for every instruction in the loop:
@@ -85,10 +107,12 @@ def licm(prog):
         blocks = func['instrs']
         name2block = block_map(form_blocks(blocks))
         cfg = get_cfg(name2block)
+        preds_cfg = get_preds_cfg(cfg)
         name2block = add_indices(name2block)
         # num2label, num2instr = get_num_mappings(name2block)
         # print(num2label)
         natural_loops = get_natural_loops(cfg)
+        identify_li_instrs(natural_loops, reaching_defs, preds_cfg, name2block)
         # print(natural_loops)
 
     # print(json.dumps(prog))
