@@ -6,6 +6,7 @@ from l5 import *
 
 from reaching_defs import reaching_definitions
 from reaching_defs import add_indices
+from cfg import add_terminators
 
 
 def get_num_mappings(name2block):
@@ -48,16 +49,16 @@ def get_natural_loops(cfg):
 def get_reaching_defs_of_var(reaching, var, num2instr):
     defs = []
     for i in reaching:
-        # print(f"reaching: {reaching}")
-        # print(f"num2instr: {num2instr}")
-        # print(f"i: {i}")
         instr = num2instr[i]
         if 'dest' in instr and instr['dest'] == var:
             defs.append(i)
     return defs
 
 
-def is_li(reaching, num2label, loop, li):
+def is_li(reaching, num2label, loop, li, instr):
+    # op = instr['op']
+    # if op == 'call' or op == 'ptradd':
+    #     return False
     all_outside = True
     for i in reaching:
         label = num2label[i]
@@ -93,20 +94,12 @@ def no_other_defs_exist(var, loop, name2block, i):
     return True
 
 
-def instr_dominates_loop_exits(reverse_dominators, loop, cfg, num2label, name2block, i, var):
+def instr_dominates_loop_exits(reverse_dominators, loop, cfg, num2label, name2block, i, var, instr):
     def is_exit(name):
         for label in cfg[name]:
             if label not in loop:
                 return True
         return False
-
-    def var_is_dead(block):
-        for instr in block:
-            if 'dest' in instr and instr['dest'] == var:
-                return True
-            if 'args' in instr and var in instr['args']:
-                return False
-        return
 
     # Check that the instruction dominates all loop exits.
     instr_label = num2label[i]
@@ -120,6 +113,11 @@ def instr_dominates_loop_exits(reverse_dominators, loop, cfg, num2label, name2bl
             flag = False
     if flag:
         return True
+
+    # Check for side effects:
+    # op = instr['op']
+    # if op == 'call' or op == 'ptradd':
+    #     return False
 
     # Check that the The assigned-to variable is dead after the loop
     seen = set()
@@ -141,11 +139,11 @@ def instr_dominates_loop_exits(reverse_dominators, loop, cfg, num2label, name2bl
     return True
 
 
-def safe_to_move(name2block, reverse_dominators, num2label, loop, cfg, var, i):
+def safe_to_move(name2block, reverse_dominators, num2label, loop, cfg, var, i, instr):
     return def_dominates_all_uses(
         name2block, reverse_dominators, num2label, var, i) and no_other_defs_exist(
             var, loop, name2block, i) and instr_dominates_loop_exits(
-                reverse_dominators, loop, cfg, num2label, name2block, i, var)
+                reverse_dominators, loop, cfg, num2label, name2block, i, var, instr)
 
 
 def flatten_blocks(name2block):
@@ -164,10 +162,11 @@ def identify_li_instrs(natural_loops, reaching_defs, cfg, preds_cfg, name2block)
     for loop in natural_loops:
         li = set()
         header = loop[0]
-        preheader = None
+        preheader_name = None
         for pred in preds_cfg[header]:
             if pred not in loop:
-                preheader = name2block[pred]
+                preheader_name = pred
+        preheader = name2block[preheader_name]
         while True:
             li_copy = {elt for elt in li}
             for name in loop:
@@ -181,7 +180,7 @@ def identify_li_instrs(natural_loops, reaching_defs, cfg, preds_cfg, name2block)
                         for arg in instr['args']:
                             reaching = get_reaching_defs_of_var(
                                 reaching_defs[i], arg, num2instr)
-                            if not is_li(reaching, num2label, loop, li):
+                            if not is_li(reaching, num2label, loop, li, instr):
                                 flag = False
                         if flag:
                             li.add(i)
@@ -191,15 +190,18 @@ def identify_li_instrs(natural_loops, reaching_defs, cfg, preds_cfg, name2block)
                 break
         for i in li:
             # print(f"instr {num2instr[i]}")
-            var = num2instr[i]['dest']
-            if safe_to_move(name2block, rev_dominators, num2label, loop, cfg, var, i):
+            instr = num2instr[i]
+            var = instr['dest']
+            if safe_to_move(name2block, rev_dominators, num2label, loop, cfg, var, i, instr):
                 block = name2block[num2label[i]]
                 for k, (instr, j) in enumerate(block):
                     if j == i:
                         del block[k]
                         break
+                # preheader.insert(len(preheader)-1, (num2instr[i], i))
                 preheader.append((num2instr[i], i))
-                num2label[i] = preheader
+                # preheader.append((num2instr[i], i))
+                num2label[i] = preheader_name
 
     return flatten_blocks(name2block)
 
@@ -210,6 +212,7 @@ def licm(prog):
         reaching_defs = reaching_definitions(func)
         blocks = func['instrs']
         name2block = block_map(form_blocks(blocks))
+        # add_terminators(name2block)
         cfg = get_cfg(name2block)
         preds_cfg = get_preds_cfg(cfg)
         name2block = add_indices(name2block)
