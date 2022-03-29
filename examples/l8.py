@@ -48,15 +48,16 @@ def get_natural_loops(cfg):
 def get_reaching_defs_of_var(reaching, var, num2instr):
     defs = []
     for i in reaching:
+        # print(f"reaching: {reaching}")
+        # print(f"num2instr: {num2instr}")
+        # print(f"i: {i}")
         instr = num2instr[i]
         if 'dest' in instr and instr['dest'] == var:
             defs.append(i)
-    print(f"reaching defs of var: {var} are defs: {defs}")
     return defs
 
 
 def is_li(reaching, num2label, loop, li):
-    print("here in is li")
     all_outside = True
     for i in reaching:
         label = num2label[i]
@@ -65,17 +66,116 @@ def is_li(reaching, num2label, loop, li):
     return all_outside or (len(reaching) == 1 and reaching[0] in li)
 
 
-def identify_li_instrs(natural_loops, reaching_defs, preds_cfg, name2block):
+def def_dominates_all_uses(name2block, reverse_dominators, num2label, var, i):
+    i_block = num2label[i]
+    dominates = reverse_dominators[i_block]
+    uses = set()
+    for _, block in name2block.items():
+        for instr, j in block:
+            if 'args' in instr and var in instr['args']:
+                # This is a use
+                uses.add(num2label[j])
+    for use in uses:
+        if use not in dominates:
+            return False
+    return True
+
+
+def no_other_defs_exist(var, loop, name2block, i):
+    # Checks that no other definitions of the same variable exist in the loop
+    for name in loop:
+        block = name2block[name]
+        for instr, j in block:
+            if j == i:
+                continue
+            if 'dest' in instr and instr['dest'] == var:
+                return False
+    return True
+
+
+def instr_dominates_loop_exits(reverse_dominators, loop, cfg, num2label, name2block, i, var):
+    def is_exit(name):
+        for label in cfg[name]:
+            if label not in loop:
+                return True
+        return False
+
+    def var_is_dead(block):
+        for instr in block:
+            if 'dest' in instr and instr['dest'] == var:
+                return True
+            if 'args' in instr and var in instr['args']:
+                return False
+        return
+
+    # Check that the instruction dominates all loop exits.
+    instr_label = num2label[i]
+    loop_exits = []
+    for block in loop:
+        if is_exit(block):
+            loop_exits.append(block)
+    flag = True
+    for exit in loop_exits:
+        if block not in reverse_dominators[instr_label]:
+            flag = False
+    if flag:
+        return True
+
+    # Check that the The assigned-to variable is dead after the loop
+    seen = set()
+    stack = []
+    for exit in loop_exits:
+        seen.add(exit)
+        stack.append(exit)
+    while stack:
+        curr = stack.pop()
+        block = name2block[curr]
+        for instr in block:
+            if 'args' in instr and var in instr['args']:
+                return False
+        for succ in cfg[curr]:
+            if succ not in seen:
+                stack.append(succ)
+                seen.add(succ)
+
+    return True
+
+
+def safe_to_move(name2block, reverse_dominators, num2label, loop, cfg, var, i):
+    return def_dominates_all_uses(
+        name2block, reverse_dominators, num2label, var, i) and no_other_defs_exist(
+            var, loop, name2block, i) and instr_dominates_loop_exits(
+                reverse_dominators, loop, cfg, num2label, name2block, i, var)
+
+
+def flatten_blocks(name2block):
+    flattened = []
+    for name, block in name2block.items():
+        flattened.append({"label": name})
+        for instr, _ in block:
+            flattened.append(instr)
+    return flattened
+
+
+def identify_li_instrs(natural_loops, reaching_defs, cfg, preds_cfg, name2block):
     num2label, num2instr = get_num_mappings(name2block)
-    li = set()
+    dominators = find_dominators(cfg, preds_cfg)
+    rev_dominators = reverse_dominators(dominators)
     for loop in natural_loops:
+        li = set()
         header = loop[0]
-        preheader = preds_cfg[header]
+        preheader = None
+        for pred in preds_cfg[header]:
+            if pred not in loop:
+                preheader = name2block[pred]
         while True:
             li_copy = {elt for elt in li}
             for name in loop:
                 block = name2block[name]
                 for instr, i in block:
+                    op = instr['op']
+                    if op == 'br' or op == 'ret' or op == 'print':
+                        continue
                     if 'args' in instr:
                         flag = True
                         for arg in instr['args']:
@@ -89,33 +189,36 @@ def identify_li_instrs(natural_loops, reaching_defs, preds_cfg, name2block):
                         li.add(i)
             if li_copy == li:
                 break
-    print(f"loop invariant stuff: {li}")
+        for i in li:
+            # print(f"instr {num2instr[i]}")
+            var = num2instr[i]['dest']
+            if safe_to_move(name2block, rev_dominators, num2label, loop, cfg, var, i):
+                block = name2block[num2label[i]]
+                for k, (instr, j) in enumerate(block):
+                    if j == i:
+                        del block[k]
+                        break
+                preheader.append((num2instr[i], i))
+                num2label[i] = preheader
 
-# iterate to convergence:
-#     for every instruction in the loop:
-#         mark it as LI iff, for all arguments x, either:
-#             all reaching defintions of x are outside of the loop, or
-#             there is exactly one definition, and it is already marked as
-#                 loop invariant
+    return flatten_blocks(name2block)
 
 
 def licm(prog):
-    reaching_defs = reaching_definitions(prog)
-    # print(reaching_defs)
 
     for func in prog['functions']:
+        reaching_defs = reaching_definitions(func)
         blocks = func['instrs']
         name2block = block_map(form_blocks(blocks))
         cfg = get_cfg(name2block)
         preds_cfg = get_preds_cfg(cfg)
         name2block = add_indices(name2block)
-        # num2label, num2instr = get_num_mappings(name2block)
-        # print(num2label)
         natural_loops = get_natural_loops(cfg)
-        identify_li_instrs(natural_loops, reaching_defs, preds_cfg, name2block)
-        # print(natural_loops)
+        new_blocks = identify_li_instrs(natural_loops, reaching_defs,
+                                        cfg, preds_cfg, name2block)
+        func['instrs'] = new_blocks
 
-    # print(json.dumps(prog))
+    print(json.dumps(prog))
 
 
 if __name__ == '__main__':
