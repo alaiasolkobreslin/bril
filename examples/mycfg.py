@@ -32,16 +32,22 @@ def get_cfg(name2block):
     """
     out = {}
     for i, (name, block) in enumerate(name2block.items()):
-        last = block[-1]
-        if last['op'] in ('jmp', 'br'):
-            succ = last['labels']
-        elif last['op'] == 'ret':
-            succ = []
-        else:
+        if not block:
             if i == len(name2block) - 1:
                 succ = []
             else:
                 succ = [list(name2block.keys())[i+1]]
+        else:
+            last = block[-1]
+            if last['op'] in ('jmp', 'br'):
+                succ = last['labels']
+            elif last['op'] == 'ret':
+                succ = []
+            else:
+                if i == len(name2block) - 1:
+                    succ = []
+                else:
+                    succ = [list(name2block.keys())[i+1]]
 
         out[name] = succ
 

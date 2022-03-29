@@ -173,7 +173,7 @@ def identify_li_instrs(natural_loops, reaching_defs, cfg, preds_cfg, name2block)
                 block = name2block[name]
                 for instr, i in block:
                     op = instr['op']
-                    if op == 'br' or op == 'ret' or op == 'print':
+                    if op in ['br', 'ret', 'print', 'store', 'ptradd']:
                         continue
                     if 'args' in instr:
                         flag = True
@@ -198,8 +198,11 @@ def identify_li_instrs(natural_loops, reaching_defs, cfg, preds_cfg, name2block)
                     if j == i:
                         del block[k]
                         break
-                # preheader.insert(len(preheader)-1, (num2instr[i], i))
-                preheader.append((num2instr[i], i))
+                if preheader[len(preheader)-1][0]['op'] in ['br', 'ret']:
+                    # print('got here')
+                    preheader.insert(len(preheader)-1, (num2instr[i], i))
+                else:
+                    preheader.append((num2instr[i], i))
                 # preheader.append((num2instr[i], i))
                 num2label[i] = preheader_name
 
