@@ -16,10 +16,6 @@ def get_cfg(name2block, init):
             else:
                 succ = [list(name2block.keys())[i+1]]
         else:
-            # last = None
-            # if len(block) == 1:
-            #     last = block[0]
-            # else:
             last = block[-1]
             if last['op'] in ('jmp', 'br'):
                 succ = last['labels']
@@ -46,15 +42,10 @@ def get_preds_cfg(cfg):
                 preds[name].add(n)
     return preds
 
-# Domain: sets of defs (should be map?)
-# Direction: Forward
-# Merge: Union
-
 
 def transfer(in_set, block, defs_map, num2reaching):
     out_set: set = in_set.copy()
     for instr, i in block:
-        # print(i)
         num2reaching[i] = {elt for elt in out_set}
         if 'dest' in instr:
             dest = instr['dest']
@@ -86,7 +77,6 @@ def reaching_defs_worklist(cfg, preds_cfg, block, name2block):
             for succ in succs:
                 worklist.add(succ)
         cfg[block] = (succs, in_set, out_set)
-    # print(f"num2reaching: {num2reaching}")
     return num2reaching
 
 
@@ -107,7 +97,6 @@ def print_set(s):
 
 def add_indices(name2block):
     out = OrderedDict()
-    # print(f"name2block: {name}")
 
     i = 0
     for name, instrs in name2block.items():
@@ -139,28 +128,6 @@ def reaching_definitions(func):
     preds_cfg = get_preds_cfg(cfg)
     name2block = add_indices(name2block)
     return reaching_defs_worklist(cfg, preds_cfg, block, name2block)
-
-
-# def reaching_definitions(prog):
-#     reaching = {}
-#     for func in prog['functions']:
-#         block = func['instrs']
-#         name2block = block_map(form_blocks(block))
-#         cfg = get_cfg(name2block, {})
-#         preds_cfg = get_preds_cfg(cfg)
-#         name2block = add_indices(name2block)
-#         reach = reaching_defs_worklist(cfg, preds_cfg, block, name2block)
-#         for k, v in reach.items():
-#             reaching[k] = v
-#         # return cfg
-#         # for (block, (_, in_set, out_set)) in cfg.items():
-#         #     print(f'{block}:')
-#         #     print('\tin', end=":  ")
-#         #     print_set(in_set)
-#         #     print('\tout', end=":  ")
-#         #     print_set(out_set)
-#     print(f"final reaching: {reaching}")
-#     return reaching
 
 
 if __name__ == '__main__':
