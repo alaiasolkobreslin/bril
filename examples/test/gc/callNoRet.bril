@@ -1,0 +1,11 @@
+@bar(pointer: ptr<int>) {
+  len: int = const 10;
+  newPointer: ptr<int> = alloc len;
+}
+
+@main {
+  len: int = const 5;
+  pointer: ptr<int> = alloc len;
+  call @bar pointer;
+  newPointer: ptr<int> = id pointer;
+}

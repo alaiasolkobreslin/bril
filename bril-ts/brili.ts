@@ -103,21 +103,62 @@ export class Heap<X> {
 
 class GarbageCollector {
 
-  private referenceCounts: Map<number, number>
+  private referenceCounts: Map<Key, number>
+  private heap: Heap<Value>
 
-  constructor() {
+  constructor(heap: Heap<Value>) {
     this.referenceCounts = new Map()
+    this.heap = heap
   }
 
-  alloc(loc: Key) {
-    this.referenceCounts.set(loc.base, 0)
+  alloc(key: Key) {
+    this.referenceCounts.set(key, 0)
   }
 
-  free(loc: Key) {
-    this.referenceCounts.delete(loc.base)
+  assign(env: Env, dest: bril.Ident, key: Key) {
+    let value = env.get(dest)
+    if (value != undefined) {
+      this.dec((value as Pointer).loc)
+    }
+    this.inc(key)
   }
 
+  inc(key: Key) {
+    let count = this.referenceCounts.get(key)
+    // count is a number or undefined (if key does not exist)
+    if (count != undefined) {
+      this.referenceCounts.set(key, count + 1)
+    }
+  }
 
+  dec(key: Key) {
+    let count = this.referenceCounts.get(key)
+    // count is a number or undefined (if key does not exist)
+    if (count != undefined) {
+      this.referenceCounts.set(key, count - 1)
+      if (count == 1) {
+        // new count is 0, so free this key
+        this.heap.free(key);
+        this.referenceCounts.delete(key)
+      }
+    }
+  }
+
+  incCounts(env: Env) {
+    env.forEach((value, _) => {
+      if (value.hasOwnProperty("loc")) {
+        this.inc((value as Pointer).loc);
+      }
+    })
+  }
+
+  decCounts(env: Env) {
+    env.forEach((value, _) => {
+      if (value.hasOwnProperty("loc")) {
+        this.dec((value as Pointer).loc)
+      }
+    })
+  }
 
 }
 
@@ -377,8 +418,10 @@ function evalCall(instr: bril.Operation, state: State): Action {
     lastlabel: null,
     curlabel: null,
     specparent: null,  // Speculation not allowed.
-    gc: new GarbageCollector(),
+    gc: state.gc,
   }
+  // Increment all reference counts in newEnv before function call 
+  newState.gc.incCounts(newEnv)
   let retVal = evalFunc(func, newState);
   state.icount = newState.icount;
 
@@ -411,8 +454,14 @@ function evalCall(instr: bril.Operation, state: State): Action {
     if (!typeCmp(instr.type, func.type)) {
       throw error(`type of value returned by function does not match declaration`);
     }
+    if (retVal.hasOwnProperty("loc")) {
+      // if the return value is a pointer, assign the instruction dest to this loc
+      state.gc.assign(state.env, instr.dest, (retVal as Pointer).loc)
+    }
     state.env.set(instr.dest, retVal);
   }
+  // Increment reference counts after function call 
+  state.gc.decCounts(newEnv)
   return NEXT;
 }
 
@@ -460,6 +509,9 @@ function evalInstr(instr: bril.Instruction, state: State): Action {
 
     case "id": {
       let val = getArgument(instr, state.env, 0);
+      if (val.hasOwnProperty("loc")) {
+        state.gc.assign(state.env, instr.dest, (val as Pointer).loc);
+      }
       state.env.set(instr.dest, val);
       return NEXT;
     }
@@ -641,14 +693,15 @@ function evalInstr(instr: bril.Instruction, state: State): Action {
         throw error(`cannot allocate non-pointer type ${instr.type}`);
       }
       let ptr = alloc(typ, Number(amt), state.heap);
-      state.gc.alloc(ptr.loc);
+      let ptrLoc = ptr.loc
+      state.gc.alloc(ptrLoc);
+      state.gc.assign(state.env, instr.dest, ptrLoc)
       state.env.set(instr.dest, ptr);
       return NEXT;
     }
 
     case "free": {
-      let val = getPtr(instr, state.env, 0);
-      state.heap.free(val.loc);
+      // nop
       return NEXT;
     }
 
@@ -685,7 +738,9 @@ function evalInstr(instr: bril.Instruction, state: State): Action {
     case "ptradd": {
       let ptr = getPtr(instr, state.env, 0)
       let val = getInt(instr, state.env, 1)
-      state.env.set(instr.dest, { loc: ptr.loc.add(Number(val)), type: ptr.type })
+      let newPtr = ptr.loc.add(Number(val))
+      state.gc.assign(state.env, instr.dest, newPtr)
+      state.env.set(instr.dest, { loc: newPtr, type: ptr.type })
       return NEXT;
     }
 
@@ -881,9 +936,11 @@ function evalProg(prog: bril.Program) {
     lastlabel: null,
     curlabel: null,
     specparent: null,
-    gc: new GarbageCollector(),
+    gc: new GarbageCollector(heap),
   }
+  state.gc.incCounts(state.env)
   evalFunc(main, state);
+  state.gc.decCounts(state.env)
 
   if (!heap.isEmpty()) {
     throw error(`Some memory locations have not been freed by end of execution.`);

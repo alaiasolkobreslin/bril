@@ -1,0 +1,5 @@
+@main {
+  len: int = const 5;
+  pointer: ptr<int> = alloc len;
+  idPointer: ptr<int> = id pointer;
+}

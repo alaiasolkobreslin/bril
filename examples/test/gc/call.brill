@@ -1,0 +1,11 @@
+@foo(pointer: ptr<int>) : ptr<int> {
+  len: int = const 10;
+  newPointer: ptr<int> = alloc len;
+  ret newPointer;
+}
+
+@main {
+  len: int = const 5;
+  pointer: ptr<int> = alloc len;
+  newPointer: ptr<int> = call @foo pointer;
+}

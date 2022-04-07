@@ -1,0 +1,6 @@
+@main {
+  five: int = const 5;
+  eight: int = const 8;
+  pointer: ptr<int> = alloc five;
+  newPointer: ptr<int> = ptradd pointer eight;
+}
