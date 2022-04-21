@@ -547,7 +547,6 @@ function traceInstr(instr: bril.Instruction, state: State) {
     case "guard":
     case "commit": {
       // bail out on speculation instructions
-      // throw new Error("Speculation already occurred")
       endTrace(state)
     }
 
