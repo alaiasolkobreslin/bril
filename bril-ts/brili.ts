@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import internal = require('stream');
 import * as bril from './bril';
 import { readStdin, unreachable } from './util';
 
@@ -374,6 +375,15 @@ type State = {
 
   // For garbage collection: the state of the RC garbage collector
   gc: GarbageCollector,
+
+  // For tracing: indicates whether or not to trace
+  shouldTrace: boolean,
+
+  // For tracing: stores the header of the current trace
+  traceHeader: string | null,
+
+  // For tracing: labels encountered
+  seen: Array<String>,
 }
 
 /**
@@ -419,6 +429,9 @@ function evalCall(instr: bril.Operation, state: State): Action {
     curlabel: null,
     specparent: null,  // Speculation not allowed.
     gc: state.gc,
+    shouldTrace: state.shouldTrace,
+    traceHeader: state.traceHeader,
+    seen: state.seen,
   }
   // Increment all reference counts in newEnv before function call 
   newState.gc.incCounts(newEnv)
@@ -465,6 +478,109 @@ function evalCall(instr: bril.Operation, state: State): Action {
   return NEXT;
 }
 
+function handleLabel(label: string, state: State) {
+  if (state.traceHeader == null) {
+    // begin tracing here
+    state.traceHeader = label
+    state.seen.push(label)
+    state.shouldTrace = true
+  }
+  else if (state.seen.indexOf(label) > -1) {
+    // we've hit a loop, so we stop tracing
+    endTrace(state)
+  }
+  else {
+    // add this label to the labels seen
+    state.seen.push(label)
+  }
+}
+
+function printTrace(instr: bril.Instruction) {
+  console.log(JSON.stringify(instr))
+}
+
+function endTrace(state: State) {
+  // state.traceHeader = null
+  // state.seen = []
+  state.shouldTrace = false
+  let commit: bril.Instruction = { op: "commit" }
+  printTrace(commit)
+}
+
+function traceInstr(instr: bril.Instruction, state: State) {
+
+  switch (instr.op) {
+    case "const":
+    case "id":
+    case "add":
+    case "mul":
+    case "sub":
+    case "div":
+    case "le":
+    case "lt":
+    case "gt":
+    case "ge":
+    case "eq":
+    case "not":
+    case "and":
+    case "or":
+    case "fadd":
+    case "fsub":
+    case "fmul":
+    case "fdiv":
+    case "fle":
+    case "flt":
+    case "fgt":
+    case "fge":
+    case "feq":
+    case "print":
+    case "phi":
+    case "ptradd": {
+      printTrace(instr)
+    }
+
+    case "nop": {
+      return
+    }
+
+    case "speculate":
+    case "guard":
+    case "commit": {
+      // bail out on speculation instructions
+      // throw new Error("Speculation already occurred")
+      endTrace(state)
+    }
+
+    case "alloc":
+    case "free":
+    case "store":
+    case "load": {
+      // bail out on memory instructions
+      endTrace(state)
+    }
+
+    case "ret":
+    case "call": {
+      // bail out on calls and returns
+      endTrace(state)
+    }
+
+    case "jmp": {
+      // eliminate jumps
+      return
+    }
+
+    case "br": {
+      // replace branches with guard instructions
+      let header = state.traceHeader
+      if (header) {
+        let guard: bril.Instruction = { op: "guard", args: instr.args, labels: [header] }
+        printTrace(guard)
+      }
+    }
+  }
+}
+
 /**
  * Interpret an instruction in a given environment, possibly updating the
  * environment. If the instruction branches to a new label, return that label;
@@ -472,6 +588,16 @@ function evalCall(instr: bril.Operation, state: State): Action {
  * instruction or "end" to terminate the function.
  */
 function evalInstr(instr: bril.Instruction, state: State): Action {
+
+  // instr is some json format instr- figure out how to get it out of the 
+  // interpreter and into a trace you can optimize
+  // can write to a file, print to the console, etc
+  // Figure out when to start and stop tracing...
+  // const file = readFileSync('./trace.json', 'utf-8');
+  // var file = new File(["trace"], "trace.txt", {
+  //   type: "text/plain",
+  // });
+
   state.icount += BigInt(1);
 
   // Check that we have the right number of arguments.
@@ -489,6 +615,10 @@ function evalInstr(instr: bril.Instruction, state: State): Action {
   // would require explicit stack management.
   if (state.specparent && ['call', 'ret'].includes(instr.op)) {
     throw error(`${instr.op} not allowed during speculation`);
+  }
+
+  if (state.shouldTrace) {
+    traceInstr(instr, state)
   }
 
   switch (instr.op) {
@@ -864,6 +994,10 @@ function evalFunc(func: bril.Function, state: State): Value | null {
       // Update CFG tracking for SSA phi nodes.
       state.lastlabel = state.curlabel;
       state.curlabel = line.label;
+
+      if (state.shouldTrace) {
+        handleLabel(line.label, state)
+      }
     }
   }
 
@@ -937,6 +1071,9 @@ function evalProg(prog: bril.Program) {
     curlabel: null,
     specparent: null,
     gc: new GarbageCollector(heap),
+    shouldTrace: true,
+    traceHeader: null,
+    seen: [],
   }
   state.gc.incCounts(state.env)
   evalFunc(main, state);
