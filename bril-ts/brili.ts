@@ -1057,6 +1057,12 @@ function evalProg(prog: bril.Program) {
     profiling = true;
     args.splice(pidx, 1);
   }
+  let tracing = false;
+  let tidx = args.indexOf("-t");
+  if (tidx > -1) {
+    tracing = true;
+    args.splice(tidx, 1);
+  }
 
   // Remaining arguments are for the main function.k
   let expected = main.args || [];
@@ -1071,7 +1077,7 @@ function evalProg(prog: bril.Program) {
     curlabel: null,
     specparent: null,
     gc: new GarbageCollector(heap),
-    shouldTrace: true,
+    shouldTrace: tracing,
     traceHeader: null,
     seen: [],
   }
