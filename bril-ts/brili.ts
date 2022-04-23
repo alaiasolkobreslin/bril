@@ -500,13 +500,19 @@ function printTrace(instr: bril.Instruction) {
 }
 
 function endTrace(state: State) {
-  // state.traceHeader = null
-  // state.seen = []
   state.shouldTrace = false
   let commit: bril.Instruction = { op: "commit" }
   printTrace(commit)
 }
 
+/**
+ * It prints out the instruction, and then it ends the trace if the instruction is
+ * a call, return, jump, or memory instruction. Otherwise, it replaces branches
+ * with guard instructions
+ * @param instr - bril.Instruction
+ * @param {State} state - The current state of the trace.
+ * @returns The function traceInstr is being returned.
+ */
 function traceInstr(instr: bril.Instruction, state: State) {
 
   switch (instr.op) {

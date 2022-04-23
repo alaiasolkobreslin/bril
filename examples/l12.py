@@ -2,30 +2,42 @@ import json
 import sys
 
 
-def speculate():
-    # for func in prog['functions']:
-    #     if func['name'] == 'main':
-    #         instrs = func['instrs']
+def get_labels(prog):
+    labels = []
+    for func in prog['functions']:
+        for instr in func['instrs']:
+            if 'label' in instr:
+                labels.append(instr['label'])
+    return labels
 
-    #         new_instrs = [{'op': 'speculate'}]
-    #         for line in sys.stdin:
-    #             if line[0] == '{':
-    #                 instr = json.loads(line)
-    #                 new_instrs.push(instr)
-    #                 print(instr)
-    #         new_instrs.push({'op': 'commit'})
 
-    #         func['instrs'] = new_instrs + instrs
-    # print(json.dumps(prog))
+def get_fresh_label(prog):
+    labels = get_labels(prog)
+    fresh = 'fresh'
+    count = 0
+    while fresh in labels:
+        fresh = 'fresh' + str(count)
+        count += 1
+    return fresh
 
-    new_instrs = [{'op': 'speculate'}]
-    for line in sys.stdin:
-        if line[0] == '{':
-            instr = json.loads(line)
-            new_instrs.append(instr)
-    new_instrs.append({'op': 'commit'})
 
-    print(new_instrs)
+def speculate(prog):
+    fresh = get_fresh_label(prog)
+    for func in prog['functions']:
+        if func['name'] == 'main':
+            instrs = func['instrs']
+
+            new_instrs = [{'op': 'speculate'}]
+            for line in sys.stdin:
+                if line[0] == '{':
+                    instr = json.loads(line)
+                    if 'op' in instr and instr['op'] == 'guard':
+                        instr['labels'] = [fresh]
+                    new_instrs.append(instr)
+
+            new_instrs.append({'label': fresh})
+            func['instrs'] = new_instrs + instrs
+    print(json.dumps(prog))
 
     # idea:
     # 1. Read the entire trace
@@ -37,7 +49,6 @@ def speculate():
 
 if __name__ == '__main__':
     # file = open(sys.argv[0])
-    # prog = json.load(file)
-    # speculate(prog)
-
-    speculate()
+    file = open("../benchmarks/collatz.json")
+    prog = json.load(file)
+    speculate(prog)
