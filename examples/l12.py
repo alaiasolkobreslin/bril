@@ -52,12 +52,7 @@ def speculate(prog):
                 if line[0] == '{':
                     instr = json.loads(line)
                     if 'op' in instr and instr['op'] == 'guard':
-                        negate = {'op': 'not', 'dest': fresh_var,
-                                  'type': 'bool', 'args': instr['args']}
-                        new_instrs.append(negate)
                         instr['labels'] = [fresh_label]
-                        instr['args'] = [fresh_var]
-
                     new_instrs.append(instr)
 
             new_instrs.append({'label': fresh_label})
