@@ -487,7 +487,9 @@ function handleLabel(label: string, state: State) {
   }
   else if (state.seen.indexOf(label) > -1) {
     // we've hit a loop, so we stop tracing
-    endTrace(state)
+    if (state.shouldTrace) {
+      endTrace(state)
+    }
   }
   else {
     // add this label to the labels seen
@@ -500,7 +502,6 @@ function printTrace(instr: bril.Instruction) {
 }
 
 function endTrace(state: State) {
-  console.log("here here")
   state.shouldTrace = false
   let commit: bril.Instruction = { op: "commit" }
   printTrace(commit)
@@ -514,7 +515,7 @@ function endTrace(state: State) {
  * @param {State} state - The current state of the trace.
  * @returns The function traceInstr is being returned.
  */
-function traceInstr(instr: bril.Instruction, state: State, b: boolean) {
+function traceInstr(instr: bril.Instruction, state: State) {
 
   switch (instr.op) {
     case "const":
@@ -544,6 +545,7 @@ function traceInstr(instr: bril.Instruction, state: State, b: boolean) {
     case "phi":
     case "ptradd": {
       printTrace(instr)
+      return
     }
 
     case "nop": {
@@ -555,6 +557,7 @@ function traceInstr(instr: bril.Instruction, state: State, b: boolean) {
     case "commit": {
       // bail out on speculation instructions
       endTrace(state)
+      return
     }
 
     case "alloc":
@@ -563,12 +566,14 @@ function traceInstr(instr: bril.Instruction, state: State, b: boolean) {
     case "load": {
       // bail out on memory instructions
       endTrace(state)
+      return
     }
 
     case "ret":
     case "call": {
       // bail out on calls and returns
       endTrace(state)
+      return
     }
 
     case "jmp": {
@@ -580,14 +585,10 @@ function traceInstr(instr: bril.Instruction, state: State, b: boolean) {
       // replace branches with guard instructions
       let header = state.traceHeader
       if (header) {
-        if (instr.args) {
-          let arg = instr.args[0]
-          let negate: bril.Instruction = { op: "not", args: instr.args, dest: "freshBool", type: "bool" }
-          let guard: bril.Instruction = { op: "guard", args: instr.args, labels: [header] }
-          printTrace(negate)
-          printTrace(guard)
-        }
+        let guard: bril.Instruction = { op: "guard", args: instr.args, labels: [header] }
+        printTrace(guard)
       }
+      return
     }
   }
 }
@@ -628,8 +629,8 @@ function evalInstr(instr: bril.Instruction, state: State): Action {
     throw error(`${instr.op} not allowed during speculation`);
   }
 
-  if (instr.op != 'br' && state.shouldTrace) {
-    traceInstr(instr, state, false)
+  if (state.shouldTrace) {
+    traceInstr(instr, state)
   }
 
   switch (instr.op) {
@@ -800,7 +801,6 @@ function evalInstr(instr: bril.Instruction, state: State): Action {
 
     case "br": {
       let cond = getBool(instr, state.env, 0);
-      traceInstr(instr, state, cond)
       if (cond) {
         return { "action": "jump", "label": getLabel(instr, 0) };
       } else {

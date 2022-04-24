@@ -21,8 +21,28 @@ def get_fresh_label(prog):
     return fresh
 
 
+def get_vars(prog):
+    vars = set()
+    for func in prog['functions']:
+        for instr in func['instrs']:
+            if 'dest' in instr:
+                vars.add(instr['dest'])
+    return vars
+
+
+def get_fresh_var(prog):
+    vars = get_vars(prog)
+    fresh = "freshVar"
+    count = 0
+    while fresh in vars:
+        fresh = 'freshVar' + str(count)
+        count += 1
+    return fresh
+
+
 def speculate(prog):
-    fresh = get_fresh_label(prog)
+    fresh_label = get_fresh_label(prog)
+    fresh_var = get_fresh_var(prog)
     for func in prog['functions']:
         if func['name'] == 'main':
             instrs = func['instrs']
@@ -32,23 +52,20 @@ def speculate(prog):
                 if line[0] == '{':
                     instr = json.loads(line)
                     if 'op' in instr and instr['op'] == 'guard':
-                        instr['labels'] = [fresh]
+                        negate = {'op': 'not', 'dest': fresh_var,
+                                  'type': 'bool', 'args': instr['args']}
+                        new_instrs.append(negate)
+                        instr['labels'] = [fresh_label]
+                        instr['args'] = [fresh_var]
+
                     new_instrs.append(instr)
 
-            new_instrs.append({'label': fresh})
+            new_instrs.append({'label': fresh_label})
             func['instrs'] = new_instrs + instrs
     print(json.dumps(prog))
 
-    # idea:
-    # 1. Read the entire trace
-    # 2. Inject the trace right after the declaration of main
-    # 3. Create a new label to represent the "actual" main
-    # 4. Adjust the guard to reflect this actual label
-    # 5. Add Speculate, commit, and guard instructions
-
 
 if __name__ == '__main__':
-    # file = open(sys.argv[0])
-    file = open("../benchmarks/collatz.json")
+    file = open(sys.argv[1])
     prog = json.load(file)
     speculate(prog)
