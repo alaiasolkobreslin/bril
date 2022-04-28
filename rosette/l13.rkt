@@ -37,6 +37,7 @@
   (define a (apply choose* terminals))
   (define b (apply choose* terminals))
   (choose*  a
+            b
             (neg a)
             (plus a b)
             (minus a b)
@@ -52,7 +53,7 @@
 (define-symbolic x integer?)
 (define-symbolic i j integer?)  ; get access to constants
 (define sketch1
-  (iffy (??expr (list x i j)) x (??expr (list x i j))))
+  (iffy (??expr (list x i j)) (??expr (list x i j)) (??expr (list x i j))))
 
 (define M
   (synthesize
@@ -66,7 +67,7 @@
 (define-symbolic y integer?)
 (define-symbolic a b integer?)  ; get access to constants
 (define sketch2
-  (mul (??expr (list y a b)) y))
+  (mul (??expr (list y a b)) (??expr (list y a b))))
 
 (define N
   (synthesize
@@ -88,16 +89,16 @@
 
 (evaluate sketch3 O)
 
-(define-symbolic e integer?)
-(define-symbolic f g integer?)  ; get access to constants
-(define sketch4
-  (mul (??expr (list e f g)) (??expr (list e f g))))
+; (define-symbolic e integer?)
+; (define-symbolic f g integer?)  ; get access to constants
+; (define sketch4
+;   (mul (??expr (list e f g)) (??expr (list e f g))))
 
-(define P
-  (synthesize
-    #:forall (list e)
-    #:guarantee (assert (= (interpret sketch4) (mul 2 (mul 2 e))))))
+; (define P
+;   (synthesize
+;     #:forall (list e)
+;     #:guarantee (assert (= (interpret sketch4) (mul 2 (mul 2 e))))))
 
-(evaluate sketch4 P)
+; (evaluate sketch4 P)
 
 
